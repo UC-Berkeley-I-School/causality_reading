@@ -1,0 +1,93 @@
+---
+title: "causal_trees_demo"
+output: html_document
+date: '2022-11-09'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+
+library(causalTree)
+library(lmtest)
+library(sandwich)
+library(ggplot2)
+
+marketing <- read.csv("causal_trees_data.csv")
+
+tree <- causalTree(totalPurchases ~ SMSRecipient + emailRecipient + previousCustomer + as.factor(store),
+                   data = marketing, 
+                   treatment = marketing$treatment, 
+                   split.Rule = "CT", 
+                   cv.option = "CT", 
+                   split.Honest = T, 
+                   cv.Honest = T, 
+                   split.Bucket = F, 
+                   minsize = 100)
+                  
+opcp <- tree$cptable[,1][which.min(tree$cptable[,4])]
+opfit <- prune(tree, opcp)
+rpart.plot(opfit, type=4)
+
+```
+
+
+```{r}
+tree2 <- causalTree(totalPurchases ~ SMSRecipient + emailRecipient + previousCustomer + as.factor(store), 
+                    data = marketing, 
+                    treatment = marketing$treatment, 
+                    split.Rule = "CT", 
+                    cv.option = "CT", 
+                    split.Honest = F, 
+                    cv.Honest = F, 
+                    split.Bucket = F, 
+                    minsize = 100)
+
+opcp <- tree2$cptable[,1][which.min(tree2$cptable[,4])]
+opfit <- prune(tree2, opcp)
+rpart.plot(opfit)
+
+```
+```{r}
+
+library(grf)
+
+# do a split
+marketing_test <- marketing[0:100,]
+marketing_train <- marketing[101:1000,]
+
+# matrices for causal_forest
+X <- cbind(marketing_train$SMSRecipient, marketing_train$emailRecipient, marketing_train$previousCustomer, as.factor(marketing_train$store))
+Y <- cbind(marketing_train$totalPurchases)
+W <- cbind(marketing_train$treatment)
+
+X.test <- cbind(marketing_test$SMSRecipient, marketing_test$emailRecipient, marketing_test$previousCustomer, as.factor(marketing_test$store))
+Y.test <- cbind(marketing_test$totalPurchases)
+
+# now run the causal forest
+forest <- causal_forest(X, Y, W)
+
+# Estimate treatment effects for the training data using out-of-bag prediction.
+predictions <- predict(forest)
+hist(predictions$predictions)
+
+# Estimate treatment effects for the test sample.
+hat <- predict(forest, X.test)
+
+hist(hat$predictions, main="CATE estimates", freq=F)
+
+```
+
+```{r}
+
+# now how important is each var for splitting?
+var_importance <- c(variable_importance(forest))
+names(var_importance) <- c("SMSRecipient", "emailRecipient", "previousCustomer", "store")
+sorted_var_importance <- sort(var_importance, decreasing = TRUE)
+
+sorted_var_importance[1:4]
+
+```
