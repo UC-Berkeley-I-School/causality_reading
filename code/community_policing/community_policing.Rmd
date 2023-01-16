@@ -1,0 +1,176 @@
+---
+title: "Community policing"
+output: html_document
+date: '2023-01-16'
+---
+Replicating Peyton et al. ["A field experiment on community policing and police legitimacy"](https://www.pnas.org/doi/full/10.1073/pnas.1910157116) (2019)
+
+# Intervention description
+From the paper:
+
+> "Our intervention, which focused on the individual-level consequences of positive, nonenforcement contact between police and the public, represents a significant departure from prior studies on police–community interactions. ... [It] involved uniformed patrol officers in New Haven, CT, making unannounced visits to randomly assigned homes across the city’s 10 police districts. [...] officers first knocked on the door of a home, initiated a formal greeting with anyone who answered, and immediately explained that they were making a community policing visit in a nonenforcement capacity (e.g., “Everything is okay. No one is in trouble and everyone is safe.”). They then asked to speak with the resident(s) living at the home and engaged them in a brief 10-min conversation using a series of strategies shown in prior studies to encourage positive intergroup contact [...]"
+
+> "[...] we first contacted registered voters (n = 49,757) via mail to participate in an ostensibly unrelated survey [...] The survey attempted to conceal the connection between the survey and intervention by including unrelated questions about city government, local politics, and national politics [...] Of those contacted by mail, 2,013 individuals nested in 1,852 households completed the baseline survey and provided their contact details to participate in follow-up surveys. We then randomly assigned 926 households (1,007 individuals) to the treatment (i.e., to receive a COP visit) and 926 households (1,006 individuals) to the control (i.e., to receive no COP visit)." 
+"After the intervention, all 2,013 individuals who participated in the baseline survey were invited via email to complete 2 follow-up surveys."
+
+Results:
+
+> "The intervention had a significant positive effect on overall attitudes toward the police as measured by an index of all primary outcome measures 3 d after the intervention (ITT: t = 6.94; P < 0.001; ATT: t = 7.15; P < 0.001) and 21 d after the intervention (ITT: t = 3.83; P < 0.001; ATT: t = 3.85; P < 0.001)."
+
+
+# Randomization description
+From the [supplementary materials](https://www.pnas.org/doi/full/10.1073/pnas.1910157116#supplementary-materials):
+
+> "Randomization was conducted at the household level with the assistance of the `blockTools` and `randomizr` packages in R [...]. Matched quartets of households were formed using the following blocking variables derived from a combination of administrative voterfile data and responses to the baseline survey:
+
+> * The proportion of residents above the median income category of $50,000-59,999.
+* The average age in the household.
+* The proportion of females in the household.
+* The proportion of residents in each of 4 major race/ethnicity categories (black, white, Hispanic, or other).
+* The household average on the first factor from a PCA on all the items underlying the 4 primary
+outcome measures: cooperation, legitimacy, compliance, and performance.
+* The proportion of residents who indicated any prior arrest by the police department.
+* The proportion of residents who indicated having any face to face contact with the police
+department in the last 12 months.
+* The proportion of residents who indicated any unfair treatment by the police department in
+the past.
+* The proportion of spanish speaking residents in the household
+* The household size
+* The police district
+1,852 households (clusters) of 2,013 individuals were randomly assigned to treatment or control across 463 blocks (quartets of households) using complete random assignment. The probabilities of assignment were constant across households. 926 households (1,007 individuals) were assigned treatment and 926 households (1,006 individuals) were assigned control."
+
+From the authors' [cops_replication_code.R](http://hdl.handle.net/10079/589ea45c-5ec8-453d-a83b-b079e13e3805) (NB: download may not work in Chrome):
+
+> "Note that the district level variable used for blocking is not included in the public release dataset. Hence the datasets of simulated test statistics used to assess balance in the SM for the paper are provided instead."
+
+# Note on data redactions
+From the authors' [cops_replication_code.R](http://hdl.handle.net/10079/589ea45c-5ec8-453d-a83b-b079e13e3805) (NB: download may not work in Chrome):
+
+> "Note: The data provided here are sufficient for replicating the results reportedin the  paper. Due to privacy concerns of both officers and residents, we are unable to make some data publicly available. This includes, 
+1) The officer-level covariate information that we use to present descriptive statistics as these data would identify individual officers.
+2) The officer level canvassing survey data that recorded their perceptions of interactions w/ residents.
+3) Geographic data on membership in each of the city's 10 police districts as these data are indirect identifiers that, in combination w/ covariates, could be used to identify individuals that participated in the study. 
+4) Individual-level data from the voter file in order to protect the confidentiality of research participants."
+
+
+# Setup
+```{r setup, include=FALSE}
+# Load Libraries and install them if needed
+
+# packages from GitHub:
+if (!"causalToolbox" %in% installed.packages()) {
+  if (!require("devtools")) install.packages("devtools")
+  devtools::install_github("forestry-labs/causalToolbox")
+  }
+library(causalToolbox)
+
+
+# CRAN packages:
+list.of.packages <- c("tidyverse", "ggplot2", "data.table", "knitr", 
+  "magrittr", "readr","dplyr",
+  # from cops_replication_code.R (cf. below):
+  "estimatr", "kableExtra", "scales", "lemon", "caret", "haven", "ggbeeswarm",
+  "randomizr","stringr","ri2","ggthemes")
+new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+if(length(new.packages)) install.packages(new.packages, repos = "http://cran.us.r-project.org")
+lapply(list.of.packages, require, character.only = TRUE)
+
+```
+
+
+
+```{r set plot params}
+knitr::opts_chunk$set(dpi=300)
+```
+
+# Import replication data
+via https://isps.yale.edu/research/data/d152 :
+```{r retrieve data}
+# avoid unnecessary downloads as the data file is 82.6 MB large:
+datafilename <- 'cops_replication_data_july2019.rds'
+# NB: this is the current (January 2023) name of the file under the
+# given URL, but cops_replication_code.R expects it under a different name
+# (fixed in downloaded copy of cops_replication_code.R)
+if (not(file.exists(datafilename))) {
+  download.file('http://hdl.handle.net/10079/de67053d-b736-436d-a0de-8933288e4ded',
+              datafilename)}
+cops_df <- read_rds(datafilename)
+```
+
+
+```{r download data for randomized inference}
+# per the authors' recommendation, download this instead of regenerating it
+# (saving a copy on disk as the file is 76.8 MB large):
+randomizationdatafilename <- 'ri_permutation_matrix.rds'
+if (not(file.exists(randomizationdatafilename))) {
+  download.file('http://hdl.handle.net/10079/99bdc975-ddfd-495f-a4be-17ea86dd57b5',
+              randomizationdatafilename)}
+```
+
+
+```{r download simulation data}
+# via https://isps.yale.edu/research/data/d152 :
+
+# download dataset of simulated test statistics under null hypothesis
+# for covariate balance check:
+simulationnullbalancedatafilename <- 'ri_balance_null_dist.rds'
+if (not(file.exists(simulationnullbalancedatafilename))) {
+  download.file('http://hdl.handle.net/10079/f2c68107-44da-4c5d-9307-98303f4386d1',
+             simulationnullbalancedatafilename)}
+
+# download dataset of simulated test statistics under sharp null hypothesis
+# for randomization inference:
+simulationsharpnulldatafilename <- 'ri_attrit_sharp_dist.rds'
+if (not(file.exists(simulationsharpnulldatafilename))) {
+  download.file('http://hdl.handle.net/10079/6e960d57-090f-48f9-9660-0baf3291b0b3',
+             simulationsharpnulldatafilename)}
+
+# download dataset of simulated test statistics under null hypothesis
+# for randomization inference:
+simulationnulldatafilename <- 'ri_attrit_null_dist.rds'
+if (not(file.exists(simulationnulldatafilename))) {
+  download.file('http://hdl.handle.net/10079/5d255628-3475-4da3-9f4d-1d82ef22d1f6',
+             simulationnulldatafilename)}
+
+```
+
+
+
+# Replicate data transformations and (some) results from the paper and supplement
+
+Run the authors' [cops_replication_code.R](http://hdl.handle.net/10079/589ea45c-5ec8-453d-a83b-b079e13e3805) (NB: download may not work in Chrome), with some fixes and exclusions due to redacted data etc.:
+
+```{r include=FALSE}
+source('cops_replication_code.R', local = knitr::knit_global())
+```
+
+Some of the replicated output:
+
+!["Fig. 1. Effect of community policing treatment on primary outcome measures. Primary outcome measures are indices of multiple questions and scaled to range from 0 to 100. Legitimacy is an index of responses to 8 statements about police legitimacy (e.g., “They make fair and impartial decisions”). Performance is an index of responses to 4 statements about police effectiveness (e.g., “I have confidence that the police in New Haven can do their job well”). Cooperation is an index of responses to 4 questions about willingness to assist police (e.g., “If the police were looking for a suspect who was hiding, and you knew where that person was, how likely would you be to provide the police with information?”). Compliance is an index of responses to 4 questions about willingness to comply with police directives (e.g., “If the police tell you to do something, you should do it”) ... ."](component_dvs_plot.png) 
+
+
+
+# Some EDA
+```{r a few histograms}
+hist(cops_df$dem_age)
+hist(cops_df$trustgov_local_index_t0)
+hist(cops_df$trustgov_local_index_t1)
+```
+
+```{r}
+cops_df %>%
+ggplot(aes(dem_race4, dem_age))+ 
+geom_boxplot(aes(fill = dem_race4), varwidth = TRUE) +
+ggtitle("age vs race")
+
+cops_df %>%
+ggplot(aes(dem_race4, trustgov_local_index_t0))+ 
+geom_boxplot(aes(fill = dem_race4), varwidth = TRUE) +
+ggtitle("trustgov_local_index_t0 vs race")
+
+cops_df %>%
+ggplot(aes(dem_race4, trustgov_local_index_t1))+ 
+geom_boxplot(aes(fill = dem_race4), varwidth = TRUE) +
+ggtitle("trustgov_local_index_t1 vs race")
+```
+

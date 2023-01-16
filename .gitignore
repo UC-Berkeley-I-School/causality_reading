@@ -49,5 +49,5 @@ po/*~
 rsconnect/
 
 # downloaded replication data
-community_policing/*.rds
+code/community_policing/*.rds
 
