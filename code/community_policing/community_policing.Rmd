@@ -37,7 +37,8 @@ the past.
 * The proportion of spanish speaking residents in the household
 * The household size
 * The police district
-1,852 households (clusters) of 2,013 individuals were randomly assigned to treatment or control across 463 blocks (quartets of households) using complete random assignment. The probabilities of assignment were constant across households. 926 households (1,007 individuals) were assigned treatment and 926 households (1,006 individuals) were assigned control."
+
+> 1,852 households (clusters) of 2,013 individuals were randomly assigned to treatment or control across 463 blocks (quartets of households) using complete random assignment. The probabilities of assignment were constant across households. 926 households (1,007 individuals) were assigned treatment and 926 households (1,006 individuals) were assigned control."
 
 From the authors' [cops_replication_code.R](http://hdl.handle.net/10079/589ea45c-5ec8-453d-a83b-b079e13e3805) (NB: download may not work in Chrome):
 
@@ -56,6 +57,11 @@ From the authors' [cops_replication_code.R](http://hdl.handle.net/10079/589ea45c
 # Setup
 ```{r setup, include=FALSE}
 # Load Libraries and install them if needed
+options("install.lock"=FALSE) # cf. https://stackoverflow.com/questions/14382209/r-install-packages-returns-failed-to-create-lock-directory/66311666#66311666
+
+
+library(remotes)
+install_version("rlang", version = "1.0.6", repos = "http://cran.us.r-project.org") # cf. https://www.reddit.com/r/rstats/comments/vthybm/q_cant_load_caret_package_rlang_102_is_already/
 
 # packages from GitHub:
 if (!"causalToolbox" %in% installed.packages()) {
@@ -72,6 +78,7 @@ list.of.packages <- c("tidyverse", "ggplot2", "data.table", "knitr",
   "estimatr", "kableExtra", "scales", "lemon", "caret", "haven", "ggbeeswarm",
   "randomizr","stringr","ri2","ggthemes")
 new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+
 if(length(new.packages)) install.packages(new.packages, repos = "http://cran.us.r-project.org")
 lapply(list.of.packages, require, character.only = TRUE)
 
