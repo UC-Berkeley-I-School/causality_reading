@@ -1,0 +1,120 @@
+---
+title: "doubleML_ex"
+author: "Jerry Gonzalez"
+date: "2024-10-03"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+```{r libraries}
+library(DoubleML)
+library(data.table)
+library(mlr3)
+library(mlr3learners)
+```
+
+```{r}
+# Load the limited dataset
+limited_data <- fread("./Downloads/causal_challenge_limited_data.csv")
+
+# Load the full dataset
+full_data <- fread("./Downloads/causal_challenge_full_data.csv")
+```
+
+```{r}
+# Converting TRUE/FALSE to 0/1 for 'treat_binary' in limited data
+limited_data[, treat_binary := as.integer(treat_binary)]
+
+# Converting TRUE/FALSE to 0/1 for 'treat_binary' in full data
+full_data[, treat_binary := as.integer(treat_binary)]
+
+# For limited data
+dml_data_limited <- DoubleMLData$new(
+  data = limited_data, 
+  y_col = "Y", 
+  d_cols = "treat_binary", 
+  x_cols = c("x1", "x2")
+)
+
+# For full data
+dml_data_full <- DoubleMLData$new(
+  data = full_data, 
+  y_col = "Y", 
+  d_cols = "treat_binary", 
+  x_cols = c("x1", "x2", "epsilon")
+)
+```
+
+```{r}
+# learners for outcome (ml_g) and treatment (ml_m)
+learner_l <- lrn("regr.ranger", num.trees = 500, max.depth = 5)
+learner_m <- lrn("classif.ranger", num.trees = 500, max.depth = 5, predict_type = "prob")
+```
+
+```{r}
+# Fit the DoubleML model on the limited data
+dml_plr_limited <- DoubleMLPLR$new(
+  data = dml_data_limited, 
+  ml_l = learner_l, 
+  ml_m = learner_m
+)
+
+# Fit the DoubleML model on the full data
+dml_plr_full <- DoubleMLPLR$new(
+  data = dml_data_full, 
+  ml_l = learner_l, 
+  ml_m = learner_m
+)
+
+dml_plr_limited$fit()
+dml_plr_full$fit()
+
+```
+
+```{r results}
+# Summarize the results for the limited data
+#summary(dml_plr_limited)
+dml_plr_limited$summary()
+
+# Summarize the results for the full data
+#summary(dml_plr_full)
+dml_plr_full$summary()
+
+```
+
+```{r DoubleLMIRM model}
+# Fit the DoubleMLIRM model on the limited data
+dml_irm_limited <- DoubleMLIRM$new(
+  data = dml_data_limited, 
+  ml_g = learner_l,   # Outcome regression learner
+  ml_m = learner_m    # Treatment learner
+)
+
+# Fit the DoubleMLIRM model on the full data
+dml_irm_full <- DoubleMLIRM$new(
+  data = dml_data_full, 
+  ml_g = learner_l,   # Outcome regression learner
+  ml_m = learner_m    # Treatment learner
+)
+
+# Fit both models
+dml_irm_limited$fit()
+dml_irm_full$fit()
+```
+
+
+```{r resultsIRM}
+# Summarize the results for the limited data
+#summary(dml_plr_limited)
+dml_irm_limited$summary()
+
+# Summarize the results for the full data
+#summary(dml_plr_full)
+dml_irm_full$summary()
+```
+
